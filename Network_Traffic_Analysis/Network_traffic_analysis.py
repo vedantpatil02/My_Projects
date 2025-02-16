@@ -1,60 +1,42 @@
-import argparse
-from telnetlib import IP
-from scapy.all import *
-import matplotlib.pyplot as plt
-
-# Dictionary to store the count of each protocol
-protocol_count = {}
+from scapy.all import sniff, IP
+import sys
 
 def packet_callback(packet):
-    # Check if the packet is an IP packet
     if IP in packet:
-        # Extract the protocol from the IP packet
-        protocol = packet[IP].proto
-        
-        # Increment the count for the protocol
-        if protocol in protocol_count:
-            protocol_count[protocol] += 1
-        else:
-            protocol_count[protocol] = 1
-
-def analyze_traffic(interface, count):
-    # Start sniffing packets
-    sniff(iface=interface, prn=packet_callback, count=count)
-
-def plot_results():
-    # Create a list of protocol names
-    protocol_names = [
-        'ICMP', 'TCP', 'UDP', 'Other'
-    ]
-
-    # Create a list of protocol counts
-    protocol_counts = [
-        protocol_count.get(1, 0),
-        protocol_count.get(6, 0),
-        protocol_count.get(17, 0),
-        sum(v for k, v in protocol_count.items() if k not in [1, 6, 17])
-    ]
-
-    # Create a bar graph of the protocol counts
-    plt.bar(protocol_names, protocol_counts)
-    plt.xlabel('Protocol')
-    plt.ylabel('Count')
-    plt.title('Network Traffic Analysis')
-    plt.show()
+        print(f"Source IP: {packet[IP].src} -> Destination IP: {packet[IP].dst}")
 
 def main():
-    # Create the argument parser
-    parser = argparse.ArgumentParser(description='Network Traffic Analysis Tool')
-    parser.add_argument('-i', '--interface', help='Network interface to capture packets', required=True)
-    parser.add_argument('-c', '--count', type=int, help='Number of packets to capture', required=True)
-    args = parser.parse_args()
+    try:
+        # First, let's check if we're running with admin/root privileges
+        if sys.platform.startswith('win32'):
+            try:
+                import ctypes
+                is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+                if not is_admin:
+                    print("Not running with administrator privileges. Please run as administrator.")
+                    return
+            except:
+                print("Could not determine administrator status.")
+        else:  # Unix-like systems
+            if os.geteuid() != 0:
+                print("Not running with root privileges. Please run with sudo.")
+                return
 
-    # Analyze the network traffic
-    analyze_traffic(args.interface, args.count)
-
-    # Plot the results
-    plot_results()
+        print("Starting packet capture... Press Ctrl+C to stop")
+        # Capture only 10 packets for testing
+        sniff(prn=packet_callback, count=10)
+        
+    except PermissionError:
+        print("\nERROR: Permission denied. Please run with sudo/administrator privileges.")
+    except Exception as e:
+        print(f"\nERROR: {str(e)}")
+        print("\nTroubleshooting steps:")
+        print("1. Make sure you have scapy installed: pip install scapy")
+        print("2. On Windows, install Npcap from: https://npcap.com/")
+        print("3. Run the script with administrator privileges")
+        if sys.platform.startswith('win32'):
+            print("4. Check if your antivirus is blocking packet capture")
 
 if __name__ == '__main__':
+    import os
     main()
